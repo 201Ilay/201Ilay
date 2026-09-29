@@ -1,0 +1,621 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0c2a22">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<!--APP-START-->
+<title>Spin Tracker</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600;800&family=Figtree:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap">
+<style>
+  /* Layout: one phone-width column, a roulette-table keypad in the middle, two bet slips above it. Single deliberate night-table look. */
+  :root {
+    --felt: #0c2a22;
+    --felt-2: #123a2f;
+    --felt-line: #2b5a4b;
+    --ink: #eef3ee;
+    --muted: #9fb8ad;
+    --brass: #d9ad55;
+    --red: #c5303b;
+    --black: #17191b;
+    --zero: #1d7a4f;
+    --slip: #f4efe3;
+    --slip-ink: #1b1d1c;
+    --slip-muted: #5d6360;
+    --display: "Big Shoulders Display", "Arial Narrow", Impact, sans-serif;
+    --body: "Figtree", system-ui, -apple-system, "Segoe UI", sans-serif;
+    --mono: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  html, body { background: var(--felt); color: var(--ink); }
+  body {
+    margin: 0;
+    font: 15px/1.45 var(--body);
+    -webkit-tap-highlight-color: transparent;
+  }
+  .wrap {
+    max-width: 520px;
+    margin: 0 auto;
+    padding-inline: 16px;
+    padding-block: 14px 40px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+  header { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+  h1 {
+    font: 800 30px/1 var(--display);
+    letter-spacing: .02em;
+    text-transform: uppercase;
+    margin: 0;
+    color: var(--brass);
+  }
+  .count { font: 500 12px var(--mono); color: var(--muted); }
+  .label {
+    font: 600 11px var(--body);
+    text-transform: uppercase;
+    letter-spacing: .12em;
+    color: var(--muted);
+  }
+
+  /* Recent spins strip */
+  .recent { display: flex; flex-direction: column; gap: 8px; }
+  .recent-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .strip {
+    display: flex; gap: 6px; overflow-x: auto; padding-bottom: 4px;
+    scrollbar-width: none; min-height: 40px;
+  }
+  .strip::-webkit-scrollbar { display: none; }
+  .chip {
+    flex: 0 0 auto;
+    width: 36px; height: 36px; border-radius: 50%;
+    display: grid; place-items: center;
+    font: 800 17px var(--display);
+    color: #fff;
+    border: 2px solid rgba(255,255,255,.18);
+  }
+  .chip.latest { width: 40px; height: 40px; font-size: 20px; border-color: var(--brass); }
+  .c-red { background: var(--red); }
+  .c-black { background: var(--black); }
+  .c-green { background: var(--zero); }
+  .empty-note { color: var(--muted); font-size: 13px; align-self: center; }
+  .sample-flag {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    background: rgba(217,173,85,.12); border: 1px dashed var(--brass);
+    border-radius: 10px; padding: 8px 12px; font-size: 13px;
+  }
+
+  /* Bet slips */
+  .slips { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .slip {
+    background: var(--slip); color: var(--slip-ink);
+    border-radius: 12px; padding: 12px;
+    display: flex; flex-direction: column; gap: 6px;
+    min-width: 0;
+    position: relative;
+  }
+  .slip::after {
+    content: ""; position: absolute; left: 0; right: 0; bottom: -6px; height: 6px;
+    background: radial-gradient(circle at 6px 0, var(--slip) 5px, transparent 5.5px) 0 0 / 12px 6px repeat-x;
+  }
+  .slip-head { display: flex; justify-content: space-between; align-items: baseline; gap: 6px; }
+  .slip-tier { font: 800 20px/1 var(--display); text-transform: uppercase; letter-spacing: .03em; }
+  .slip.big .slip-tier { color: var(--red); }
+  .slip.small .slip-tier { color: #1d6b48; }
+  .slip-stake { font: 500 12px var(--mono); color: var(--slip-muted); white-space: nowrap; }
+  .slip-bet { font: 700 17px/1.2 var(--body); overflow-wrap: anywhere; }
+  .slip-nums { display: flex; flex-wrap: wrap; gap: 4px; }
+  .slip-nums .chip { width: 30px; height: 30px; font-size: 15px; border-width: 1px; }
+  .slip-why { font-size: 12.5px; color: var(--slip-muted); line-height: 1.35; }
+  .slip-pay {
+    margin-top: auto; padding-top: 6px; border-top: 1px dashed #c9c2b2;
+    font: 500 12px var(--mono); color: var(--slip-ink);
+    display: flex; justify-content: space-between; gap: 6px; flex-wrap: wrap;
+  }
+  .slip-alt { font-size: 12.5px; color: var(--slip-ink); }
+  .slip-alt b { font-weight: 700; }
+  .waiting { color: var(--slip-muted); font-size: 13.5px; }
+
+  /* Keypad: roulette table layout */
+  .table {
+    background: var(--felt-2);
+    border: 1px solid var(--felt-line);
+    border-radius: 14px;
+    padding: 10px;
+    display: flex; flex-direction: column; gap: 8px;
+  }
+  .zeros { display: grid; gap: 5px; grid-template-columns: 1fr; }
+  .zeros.american { grid-template-columns: 1fr 1fr; }
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; }
+  .num {
+    appearance: none; border: 0; cursor: pointer;
+    height: 42px; border-radius: 8px;
+    font: 800 21px var(--display); color: #fff;
+    position: relative;
+    transition: transform .08s ease, filter .15s;
+    touch-action: manipulation;
+  }
+  .num:active { transform: scale(.94); filter: brightness(1.3); }
+  .num:focus-visible { outline: 3px solid var(--brass); outline-offset: 2px; }
+  .num .hits {
+    position: absolute; top: 3px; right: 5px;
+    font: 500 9.5px var(--mono); opacity: .75;
+  }
+  .num.flash { animation: flash .5s ease; }
+  @keyframes flash { 0% { box-shadow: 0 0 0 0 var(--brass); } 100% { box-shadow: 0 0 0 10px transparent; } }
+  .num.pick::before {
+    content: ""; position: absolute; left: 5px; top: 5px; width: 7px; height: 7px;
+    border-radius: 50%; background: var(--brass);
+  }
+  .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .btn {
+    appearance: none; cursor: pointer;
+    border: 1px solid var(--felt-line); background: transparent; color: var(--ink);
+    border-radius: 10px; padding: 11px 12px;
+    font: 600 14px var(--body);
+    touch-action: manipulation;
+  }
+  .btn:focus-visible { outline: 3px solid var(--brass); outline-offset: 2px; }
+  .btn.primary { background: var(--brass); color: #1f1a0e; border-color: var(--brass); }
+  .btn.danger { color: #ffb4b9; border-color: #6b3036; }
+  .btn.small { padding: 6px 10px; font-size: 12.5px; }
+  .confirm { display: flex; gap: 8px; align-items: center; justify-content: space-between; font-size: 13.5px; }
+
+  /* Stats */
+  details {
+    border: 1px solid var(--felt-line); border-radius: 12px; background: var(--felt-2);
+  }
+  summary {
+    cursor: pointer; padding: 12px 14px; list-style: none;
+    display: flex; justify-content: space-between; align-items: center;
+    font-weight: 600;
+  }
+  summary::-webkit-details-marker { display: none; }
+  summary::after { content: "+"; font: 500 18px var(--mono); color: var(--muted); }
+  details[open] summary::after { content: "–"; }
+  .panel { padding: 0 14px 14px; display: flex; flex-direction: column; gap: 14px; }
+  .bars { display: flex; flex-direction: column; gap: 8px; }
+  .bar-row { display: grid; grid-template-columns: 1fr; gap: 3px; }
+  .bar-labels { display: flex; justify-content: space-between; font-size: 12.5px; }
+  .bar-labels span:last-child { text-align: right; }
+  .bar {
+    height: 10px; border-radius: 5px; overflow: hidden; display: flex;
+    background: var(--felt-line);
+  }
+  .bar i { display: block; height: 100%; }
+  .bar i + i { border-left: 2px solid var(--felt-2); }
+  .tri { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+  .tri div {
+    border: 1px solid var(--felt-line); border-radius: 8px; padding: 6px 8px;
+    display: flex; flex-direction: column; gap: 2px;
+  }
+  .tri b { font: 800 20px/1 var(--display); }
+  .tri small { color: var(--muted); font-size: 11.5px; }
+  .tri .top { border-color: var(--brass); }
+  .numlist { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .numlist .chip { width: 32px; height: 32px; font-size: 15px; }
+  .numlist .tag { font: 500 11px var(--mono); color: var(--muted); margin-right: 4px; }
+  .tabnum { font-variant-numeric: tabular-nums; font-family: var(--mono); font-size: 12px; }
+
+  .settings { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+  .field label { font-size: 12.5px; color: var(--muted); }
+  .field input, .field select {
+    width: 100%; font: 500 15px var(--mono);
+    background: var(--felt); color: var(--ink);
+    border: 1px solid var(--felt-line); border-radius: 8px; padding: 8px 10px;
+  }
+  .field input:focus-visible, .field select:focus-visible { outline: 2px solid var(--brass); outline-offset: 1px; }
+  .note { font-size: 12.5px; color: var(--muted); line-height: 1.5; margin: 0; }
+
+  @media (max-width: 360px) {
+    .slips { grid-template-columns: 1fr; }
+    .num { height: 38px; font-size: 19px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .num, .num.flash { transition: none; animation: none; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Spin Tracker</h1>
+    <span class="count" id="count">0 spins</span>
+  </header>
+
+  <section class="recent" aria-label="Recent spins">
+    <div class="recent-row">
+      <span class="label">Last spins · newest first</span>
+    </div>
+    <div class="strip" id="strip"></div>
+    <div class="sample-flag" id="sampleFlag" hidden>
+      <span>These are sample spins so you can see how it works.</span>
+      <button class="btn small" id="clearSample" type="button">Start fresh</button>
+    </div>
+  </section>
+
+  <section class="slips" aria-label="Suggested bets" id="slips"></section>
+
+  <section class="table" aria-label="Enter the number that came up">
+    <span class="label">Tap the number that came up</span>
+    <div class="zeros" id="zeros"></div>
+    <div class="grid" id="grid"></div>
+    <div class="actions" id="actions">
+      <button class="btn" id="undo" type="button">Undo last</button>
+      <button class="btn danger" id="clear" type="button">Clear all</button>
+    </div>
+    <div class="confirm" id="confirm" hidden>
+      <span>Delete every spin?</span>
+      <span style="display:flex;gap:8px">
+        <button class="btn small" id="confirmNo" type="button">Keep</button>
+        <button class="btn small danger" id="confirmYes" type="button">Delete</button>
+      </span>
+    </div>
+  </section>
+
+  <details id="statsBox" open>
+    <summary>Table stats</summary>
+    <div class="panel" id="stats"></div>
+  </details>
+
+  <details id="settingsBox">
+    <summary>Stakes &amp; settings</summary>
+    <div class="panel">
+      <div class="settings">
+        <div class="field">
+          <label for="smallStake">Small bet stake</label>
+          <input id="smallStake" type="number" inputmode="decimal" min="1" step="1" value="10">
+        </div>
+        <div class="field">
+          <label for="bigStake">Big bet stake</label>
+          <input id="bigStake" type="number" inputmode="decimal" min="1" step="1" value="50">
+        </div>
+        <div class="field">
+          <label for="window">Look back (spins)</label>
+          <input id="window" type="number" inputmode="numeric" min="6" max="200" step="1" value="18">
+        </div>
+        <div class="field">
+          <label for="wheel">Wheel</label>
+          <select id="wheel">
+            <option value="eu">European (single 0)</option>
+            <option value="us">American (0 and 00)</option>
+          </select>
+        </div>
+      </div>
+      <p class="note">
+        <b>Small bet</b> is a low-risk outside bet (red/black, odd/even, 1–18/19–36, or a dozen) using your small stake.
+        <b>Big bet</b> spreads your big stake over a group of numbers that sit next to each other on the wheel and have been hitting most, paid 35 to 1 each.
+      </p>
+      <p class="note">
+        Every spin is independent. Past numbers do not change the odds of the next one, and the house edge
+        (2.7% on a single-zero wheel, 5.26% with 00) applies to every bet here. These picks follow the
+        patterns in the spins you entered. Set a loss limit before you play.
+      </p>
+    </div>
+  </details>
+</div>
+
+<script>
+(function () {
+  const REDS = new Set([1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36]);
+  const WHEEL_EU = [0,32,15,19,4,21,2,25,17,34,6,27,13,36,11,30,8,23,10,5,24,16,33,1,20,14,31,9,22,18,29,7,28,12,35,3,26];
+  const WHEEL_US = [0,28,9,26,30,11,7,20,32,17,5,22,34,15,3,24,36,13,1,"00",27,10,25,29,12,8,19,31,18,6,21,33,16,4,23,35,14,2];
+  const SAMPLE = [17,32,4,21,19,8,26,15,34,2,11,21,25,0,19,33,4,7,15,30,21,12];
+  const KEY = "spin-tracker-v1";
+
+  const $ = (id) => document.getElementById(id);
+  const isZero = (n) => n === 0 || n === "00";
+  const colorOf = (n) => isZero(n) ? "green" : (REDS.has(n) ? "red" : "black");
+
+  let state = { spins: [], sample: true, small: 10, big: 50, win: 18, wheel: "eu" };
+
+  function load() {
+    try {
+      const raw = localStorage.getItem(KEY);
+      if (raw) state = Object.assign(state, JSON.parse(raw));
+    } catch (e) {}
+    if (state.sample && state.spins.length === 0) state.spins = SAMPLE.slice();
+  }
+  function save() {
+    try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {}
+  }
+
+  function chip(n, extra) {
+    const s = document.createElement("span");
+    s.className = "chip c-" + colorOf(n) + (extra ? " " + extra : "");
+    s.textContent = n;
+    return s;
+  }
+  const money = (v) => {
+    const r = Math.round(v * 100) / 100;
+    return (Number.isInteger(r) ? r : r.toFixed(2)).toString();
+  };
+
+  /* ---------- analysis ---------- */
+  function analyse() {
+    const all = state.spins;                 // newest last
+    const recent = all.slice(-state.win);
+    const nonZero = recent.filter((n) => !isZero(n));
+    const nz = nonZero.length || 1;
+
+    const pairs = [
+      { key: "color", a: "Red", b: "Black", fa: (n) => REDS.has(n) },
+      { key: "parity", a: "Even", b: "Odd", fa: (n) => n % 2 === 0 },
+      { key: "range", a: "1–18", b: "19–36", fa: (n) => n <= 18 },
+    ].map((p) => {
+      const ca = nonZero.filter(p.fa).length;
+      const cb = nonZero.length - ca;
+      // current streak on this pair, counting back from latest (zero breaks it)
+      let streak = 0, side = null;
+      for (let i = all.length - 1; i >= 0; i--) {
+        const n = all[i];
+        if (isZero(n)) break;
+        const s = p.fa(n) ? "a" : "b";
+        if (side === null) side = s;
+        if (s !== side) break;
+        streak++;
+      }
+      return Object.assign(p, { ca, cb, streak, streakSide: side });
+    });
+
+    const dozens = [0, 0, 0], cols = [0, 0, 0];
+    nonZero.forEach((n) => { dozens[Math.floor((n - 1) / 12)]++; cols[(n - 1) % 3]++; });
+    const zeros = recent.length - nonZero.length;
+
+    const counts = new Map();
+    all.forEach((n) => counts.set(n, (counts.get(n) || 0) + 1));
+    const recentCounts = new Map();
+    recent.forEach((n) => recentCounts.set(n, (recentCounts.get(n) || 0) + 1));
+
+    // last seen (spins ago)
+    const wheel = state.wheel === "us" ? WHEEL_US : WHEEL_EU;
+    const lastSeen = new Map();
+    wheel.forEach((n) => {
+      const idx = all.lastIndexOf(n);
+      lastSeen.set(n, idx === -1 ? Infinity : all.length - 1 - idx);
+    });
+
+    // hottest 5-pocket wheel sector in the look-back window
+    let best = null;
+    for (let i = 0; i < wheel.length; i++) {
+      const seg = [-2, -1, 0, 1, 2].map((d) => wheel[(i + d + wheel.length) % wheel.length]);
+      const hits = seg.reduce((s, n) => s + (recentCounts.get(n) || 0), 0);
+      const lastHitCentre = lastSeen.get(wheel[i]);
+      if (!best || hits > best.hits || (hits === best.hits && lastHitCentre < best.centreSeen)) {
+        best = { seg, hits, centre: wheel[i], centreSeen: lastHitCentre };
+      }
+    }
+
+    return { all, recent, nonZero, nz, pairs, dozens, cols, zeros, counts, recentCounts, lastSeen, sector: best, wheel };
+  }
+
+  function pickSmall(A) {
+    // score each even-money side: share in window + streak bonus
+    let best = null;
+    A.pairs.forEach((p) => {
+      const shareA = p.ca / A.nz, shareB = p.cb / A.nz;
+      const side = shareA >= shareB ? "a" : "b";
+      let edge = Math.abs(shareA - shareB);
+      if (p.streakSide === side && p.streak >= 2) edge += 0.04 * Math.min(p.streak, 6);
+      const cand = {
+        label: side === "a" ? p.a : p.b,
+        other: side === "a" ? p.b : p.a,
+        count: side === "a" ? p.ca : p.cb,
+        edge, streak: p.streakSide === side ? p.streak : 0,
+      };
+      if (!best || cand.edge > best.edge) best = cand;
+    });
+    const dIdx = A.dozens.indexOf(Math.max(...A.dozens));
+    const cIdx = A.cols.indexOf(Math.max(...A.cols));
+    return { even: best, dozen: dIdx, dozenCount: A.dozens[dIdx], col: cIdx, colCount: A.cols[cIdx] };
+  }
+
+  /* ---------- render ---------- */
+  function renderStrip() {
+    const strip = $("strip");
+    strip.innerHTML = "";
+    const list = state.spins.slice().reverse().slice(0, 30);
+    if (!list.length) {
+      const s = document.createElement("span");
+      s.className = "empty-note";
+      s.textContent = "No spins yet. Tap the first number below.";
+      strip.appendChild(s);
+    }
+    list.forEach((n, i) => strip.appendChild(chip(n, i === 0 ? "latest" : "")));
+    $("count").textContent = state.spins.length + (state.spins.length === 1 ? " spin" : " spins");
+    $("sampleFlag").hidden = !state.sample;
+  }
+
+  const MIN = 6;
+  function renderSlips(A) {
+    const box = $("slips");
+    box.innerHTML = "";
+    const small = document.createElement("article");
+    small.className = "slip small";
+    const big = document.createElement("article");
+    big.className = "slip big";
+    box.append(small, big);
+
+    const head = (tier, stake) =>
+      `<div class="slip-head"><span class="slip-tier">${tier}</span><span class="slip-stake">stake ${money(stake)}</span></div>`;
+
+    if (state.spins.length < MIN) {
+      const need = MIN - state.spins.length;
+      const msg = `<p class="waiting">Enter ${need} more spin${need === 1 ? "" : "s"} to get a pick.</p>`;
+      small.innerHTML = head("Small bet", state.small) + msg;
+      big.innerHTML = head("Big bet", state.big) + msg;
+      return new Set();
+    }
+
+    const S = pickSmall(A);
+    const dozenNames = ["1st 12 (1–12)", "2nd 12 (13–24)", "3rd 12 (25–36)"];
+    const why = S.even.streak >= 2
+      ? `${S.even.count} of last ${A.nonZero.length} non-zero spins, and ${S.even.streak} in a row now.`
+      : `${S.even.count} of last ${A.nonZero.length} non-zero spins.`;
+    small.innerHTML = head("Small bet", state.small) +
+      `<div class="slip-bet">${S.even.label}</div>
+       <div class="slip-why">${why}</div>
+       <div class="slip-alt">Or: <b>${dozenNames[S.dozen]}</b> · ${S.dozenCount} hits (pays 2:1)</div>
+       <div class="slip-pay"><span>pays 1:1</span><span>win +${money(state.small)}</span></div>`;
+
+    const seg = A.sector.seg;
+    const per = state.big / seg.length;
+    const winNet = per * 35 - (state.big - per);
+    big.innerHTML = head("Big bet", state.big) +
+      `<div class="slip-bet">${seg.length} numbers around ${A.sector.centre}</div>
+       <div class="slip-nums"></div>
+       <div class="slip-why">This wheel section hit ${A.sector.hits} time${A.sector.hits === 1 ? "" : "s"} in the last ${A.recent.length} spins.</div>
+       <div class="slip-pay"><span>${money(per)} on each</span><span>win +${money(winNet)}</span></div>`;
+    const nums = big.querySelector(".slip-nums");
+    seg.forEach((n) => nums.appendChild(chip(n)));
+    return new Set(seg);
+  }
+
+  function renderKeypad(A, picks) {
+    const zeros = $("zeros"), grid = $("grid");
+    zeros.innerHTML = ""; grid.innerHTML = "";
+    zeros.className = "zeros" + (state.wheel === "us" ? " american" : "");
+    const make = (n) => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "num c-" + colorOf(n) + (picks.has(n) ? " pick" : "");
+      b.dataset.n = n;
+      b.setAttribute("aria-label", "Add " + n);
+      const hits = A.counts.get(n) || 0;
+      b.innerHTML = `${n}${hits ? `<span class="hits">${hits}</span>` : ""}`;
+      return b;
+    };
+    zeros.appendChild(make(0));
+    if (state.wheel === "us") zeros.appendChild(make("00"));
+    for (let n = 1; n <= 36; n++) grid.appendChild(make(n));
+  }
+
+  function renderStats(A) {
+    const el = $("stats");
+    if (!state.spins.length) {
+      el.innerHTML = `<p class="note">Stats appear after your first spin.</p>`;
+      return;
+    }
+    const bar = (p) => {
+      const t = (p.ca + p.cb) || 1;
+      const pa = (p.ca / t) * 100;
+      const colA = p.key === "color" ? "var(--red)" : "var(--brass)";
+      const colB = p.key === "color" ? "#3a3d40" : "#6f8f82";
+      return `<div class="bar-row">
+        <div class="bar-labels"><span>${p.a} <span class="tabnum">${p.ca}</span></span><span><span class="tabnum">${p.cb}</span> ${p.b}</span></div>
+        <div class="bar"><i style="width:${pa}%;background:${colA}"></i><i style="width:${100 - pa}%;background:${colB}"></i></div>
+      </div>`;
+    };
+    const tri = (arr, names) => {
+      const max = Math.max(...arr);
+      return `<div class="tri">${arr.map((v, i) =>
+        `<div class="${v === max && max > 0 ? "top" : ""}"><small>${names[i]}</small><b>${v}</b></div>`).join("")}</div>`;
+    };
+
+    const hot = [...A.recentCounts.entries()]
+      .sort((x, y) => y[1] - x[1] || A.lastSeen.get(x[0]) - A.lastSeen.get(y[0]))
+      .filter((e) => e[1] > 1).slice(0, 6);
+    const cold = [...A.lastSeen.entries()]
+      .sort((x, y) => y[1] - x[1]).slice(0, 6);
+
+    el.innerHTML = `
+      <span class="label">Last ${A.recent.length} spins · zeros ${A.zeros}</span>
+      <div class="bars">${A.pairs.map(bar).join("")}</div>
+      <span class="label">Dozens</span>
+      ${tri(A.dozens, ["1–12", "13–24", "25–36"])}
+      <span class="label">Columns</span>
+      ${tri(A.cols, ["Col 1", "Col 2", "Col 3"])}
+      <span class="label">Hot numbers (hits in look-back)</span>
+      <div class="numlist" id="hotList"></div>
+      <span class="label">Sleepers (spins since last seen)</span>
+      <div class="numlist" id="coldList"></div>`;
+
+    const hl = $("hotList");
+    if (!hot.length) hl.innerHTML = `<span class="note">No repeats yet.</span>`;
+    hot.forEach(([n, c]) => {
+      hl.appendChild(chip(n));
+      const t = document.createElement("span"); t.className = "tag"; t.textContent = "×" + c; hl.appendChild(t);
+    });
+    const cl = $("coldList");
+    cold.forEach(([n, ago]) => {
+      cl.appendChild(chip(n));
+      const t = document.createElement("span"); t.className = "tag";
+      t.textContent = ago === Infinity ? "never" : ago; cl.appendChild(t);
+    });
+  }
+
+  function render() {
+    const A = analyse();
+    renderStrip();
+    const picks = renderSlips(A);
+    renderKeypad(A, picks);
+    renderStats(A);
+  }
+
+  /* ---------- events ---------- */
+  function addSpin(n) {
+    if (state.sample) { state.spins = []; state.sample = false; }
+    state.spins.push(n);
+    save(); render();
+    const btn = document.querySelector(`.num[data-n="${n}"]`);
+    if (btn) { btn.classList.add("flash"); }
+    if (navigator.vibrate) { try { navigator.vibrate(15); } catch (e) {} }
+  }
+
+  function onKey(e) {
+    const b = e.target.closest(".num");
+    if (!b) return;
+    const v = b.dataset.n;
+    addSpin(v === "00" ? "00" : Number(v));
+  }
+  $("grid").addEventListener("click", onKey);
+  $("zeros").addEventListener("click", onKey);
+
+  $("undo").addEventListener("click", () => {
+    if (state.sample) return;
+    state.spins.pop(); save(); render();
+  });
+  $("clear").addEventListener("click", () => { $("actions").hidden = true; $("confirm").hidden = false; });
+  $("confirmNo").addEventListener("click", () => { $("actions").hidden = false; $("confirm").hidden = true; });
+  $("confirmYes").addEventListener("click", () => {
+    state.spins = []; state.sample = false; save(); render();
+    $("actions").hidden = false; $("confirm").hidden = true;
+  });
+  $("clearSample").addEventListener("click", () => { state.spins = []; state.sample = false; save(); render(); });
+
+  function bindNum(id, key, min) {
+    const el = $(id);
+    el.value = state[key];
+    el.addEventListener("input", () => {
+      const v = parseFloat(el.value);
+      if (!isNaN(v) && v >= min) { state[key] = key === "win" ? Math.round(v) : v; save(); render(); }
+    });
+  }
+  bindNum("smallStake", "small", 0.01);
+  bindNum("bigStake", "big", 0.01);
+  bindNum("window", "win", 6);
+  $("wheel").value = state.wheel;
+  $("wheel").addEventListener("change", () => {
+    state.wheel = $("wheel").value;
+    if (state.wheel === "eu") state.spins = state.spins.filter((n) => n !== "00");
+    save(); render();
+  });
+
+  load();
+  $("smallStake").value = state.small;
+  $("bigStake").value = state.big;
+  $("window").value = state.win;
+  $("wheel").value = state.wheel;
+  render();
+})();
+</script>
+<!--APP-END-->
+</body>
+</html>
